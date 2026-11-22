@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>האדמו״ר מקאזניץ שליט״א — גלריות מחצר הקודש</title>
+  <meta name="description" content="גלריות תמונות ווידאו מאירועי חצר הקודש קאזניץ, לפי אירועים ותאריכים, בנשיאות כ״ק מרן אדמו״ר שליט״א.">
+  <meta property="og:title" content="האדמו״ר מקאזניץ שליט״א — גלריות">
+  <meta property="og:description" content="גלריות תמונות ווידאו מאירועי חצר הקודש קאזניץ.">
+  <meta property="og:image" content="assets/img/rebbe-portrait.jpg">
+  <meta name="theme-color" content="#f5ead8">
+  <link rel="icon" href="favicon.png" type="image/png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Suez+One&family=Heebo:wght@400;600;700&display=swap">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <a href="index.html" class="brand" aria-label="מוסדות קאזניץ — לעמוד הבית">
+      <span class="brand-mark"><img src="assets/img/logo.jpg" alt="" width="46" height="46"></span>
+      <span class="brand-name">מוסדות קאזניץ</span>
+    </a>
+    <nav class="site-nav" aria-label="ניווט ראשי">
+      <a href="#galleries" class="btn btn-ghost">הגלריות</a>
+      <a href="#contact" class="btn btn-primary">יצירת קשר</a>
+    </nav>
+  </header>
+
+  <main>
+    <section id="top" class="hero">
+      <div class="hero-copy">
+        <span class="tag tag-accent-2">בנשיאות כ״ק מרן אדמו״ר שליט״א</span>
+        <h1 class="hero-title">האדמו״ר מקאזניץ <span class="hero-title-accent">שליט״א</span></h1>
+        <p class="hero-lede">גלריות תמונות ווידאו מאירועי חצר הקודש קאזניץ, מסודרות לפי אירוע ותאריך הצילום.</p>
+        <div class="hero-actions">
+          <a href="#galleries" class="btn btn-primary">לרשימת הגלריות</a>
+        </div>
+      </div>
+
+      <div class="hero-art">
+        <div class="hero-frame">
+          <img src="assets/img/rebbe-portrait.jpg"
+               srcset="assets/img/rebbe-portrait-900.jpg 508w, assets/img/rebbe-portrait.jpg 1016w"
+               sizes="(max-width: 720px) 88vw, 40vw"
+               width="1016" height="1800"
+               alt="כ״ק מרן אדמו״ר מקאזניץ שליט״א ליד השולחן"
+               fetchpriority="high">
+        </div>
+        <div class="hero-badge" aria-hidden="true"><img src="assets/img/logo.jpg" alt=""></div>
+        <div class="hero-blob" aria-hidden="true"></div>
+      </div>
+    </section>
+
+    <section id="galleries" class="galleries" aria-labelledby="galleries-title">
+      <div class="section-head section-head-row">
+        <div class="section-head">
+          <span class="tag tag-accent">גלריות</span>
+          <h2 id="galleries-title" class="section-title">אירועים מחצר הקודש</h2>
+          <p class="section-summary" id="gallery-summary"></p>
+        </div>
+        <fieldset class="seg" id="gallery-filter" aria-label="סינון לפי סוג">
+          <label class="seg-opt"><input type="radio" name="filter" value="all" checked>הכול</label>
+          <label class="seg-opt"><input type="radio" name="filter" value="photos">תמונות</label>
+          <label class="seg-opt"><input type="radio" name="filter" value="video">וידאו</label>
+        </fieldset>
+      </div>
+      <div id="gallery-list" class="gallery-list">
+        <noscript><p class="gallery-empty">להצגת הגלריות יש להפעיל JavaScript.</p></noscript>
+      </div>
+    </section>
+  </main>
+
+  <footer id="contact" class="site-footer">
+    <div class="footer-brand">
+      <span class="footer-mark"><img src="assets/img/logo.jpg" alt="" width="60" height="60"></span>
+      <div class="footer-text">
+        <span class="footer-name">מוסדות קאזניץ</span>
+        <span class="footer-tagline">בנשיאות כ״ק מרן אדמו״ר שליט״א</span>
+        <!-- Contact details (phone / address / email) go here once provided. -->
+      </div>
+    </div>
+    <a href="#top" class="btn btn-primary">חזרה למעלה</a>
+  </footer>
+
+  <script src="data/galleries.js"></script>
+  <script src="js/site.js"></script>
+</body>
+</html>
