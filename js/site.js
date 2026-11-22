@@ -4,7 +4,19 @@
    ────────────────────────────────────────────────────────────────────────── */
 (function () {
   'use strict';
-  const GALLERIES = window.GALLERIES || [];
+  // איחוד רשומות עם אותו id: הרשומה הראשונה (הידנית, ב-data/galleries.js)
+  // קובעת כותרת/תאריך/מקום, והפריטים של כל הרשומות מצטרפים יחד. כך אפשר
+  // לתת שם לאירוע שנוצר אוטומטית מהאלבום בלי לגעת בקובץ שנוצר.
+  const GALLERIES = (function merge(list) {
+    const byId = new Map();
+    list.forEach((g) => {
+      const prev = byId.get(g.id);
+      if (!prev) { byId.set(g.id, Object.assign({}, g, { items: (g.items || []).slice() })); return; }
+      prev.items = prev.items.concat(g.items || []);
+      ['title', 'date', 'hebrewDate', 'place', 'cover'].forEach((k) => { if (!prev[k] && g[k]) prev[k] = g[k]; });
+    });
+    return Array.from(byId.values()).filter((g) => g.items.length);
+  })(window.GALLERIES || []);
 
   /* ── תאריכים ─────────────────────────────────────────────────────────── */
   const HEB_MONTHS = ['תשרי', 'חשון', 'כסלו', 'טבת', 'שבט', 'אדר', 'אדר א׳', 'אדר ב׳', 'ניסן', 'אייר', 'סיון', 'תמוז', 'אב', 'אלול'];
