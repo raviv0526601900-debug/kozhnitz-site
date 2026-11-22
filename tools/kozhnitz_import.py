@@ -4,14 +4,15 @@
 ייבוא אלבום גוגל פוטוס (ZIP) לאתר קאזניץ — רץ על מק.
 
 מה הוא עושה:
-  1. פורס את קובצי ה-ZIP לתיקיית עבודה (~/kozhnitz-work/raw)
+  1. קורא את קובצי ה-ZIP בלי לפרוס אותם (חוסך דיסק): כל תמונה נשלפת,
+     מעובדת ונמחקת מיד
   2. סופר תמונות וסרטונים, קורא את תאריך הצילום (EXIF) דרך sips
   3. מקבץ את התמונות לגלריות לפי יום צילום
   4. מקטין כל תמונה לרשת (1800px + תמונה ממוזערת 900px) — HEIC הופך ל-JPEG
   5. מעתיק את התוצאה לריפו של האתר וכותב data/galleries-album.js
   6. עושה commit + push (אם git זמין ומחובר)
-  סרטונים לא נכנסים לאתר (כבדים מדי ל-GitHub Pages): הם נאספים
-  ב-~/kozhnitz-work/videos לפי תאריך, ומופיעים בדו"ח.
+  סרטונים לא נכנסים לאתר (כבדים מדי ל-GitHub Pages) ולא נשלפים מה-ZIP:
+  הם רק נספרים ומופיעים בדו"ח.
 
 שימוש:
   python3 kozhnitz_import.py ~/Downloads/album-001.zip [עוד zip...]
@@ -35,21 +36,26 @@ def run(cmd, **kw):
 def log(msg):
     print(msg, flush=True)
 
-def extract(zips):
-    os.makedirs(RAW, exist_ok=True)
+TMP = os.path.join(WORK, "tmp")
+
+def zip_members(zips):
+    """yield (zip_path, ZipInfo) for every media file, without extracting."""
     for z in zips:
-        marker = os.path.join(RAW, "." + os.path.basename(z) + ".done")
-        if os.path.exists(marker):
-            log(f"  כבר נפרס: {os.path.basename(z)}")
-            continue
-        log(f"  פורס: {os.path.basename(z)} ...")
         with zipfile.ZipFile(z) as zf:
             for info in zf.infolist():
                 name = info.filename
-                if name.startswith("__MACOSX") or os.path.basename(name).startswith("."):
+                base = os.path.basename(name)
+                if info.is_dir() or name.startswith("__MACOSX") or base.startswith("."):
                     continue
-                zf.extract(info, RAW)
-        open(marker, "w").close()
+                yield z, info
+
+def extract_one(zip_path, info):
+    """extract a single member to TMP and return its path (caller deletes it)."""
+    os.makedirs(TMP, exist_ok=True)
+    dst = os.path.join(TMP, os.path.basename(info.filename))
+    with zipfile.ZipFile(zip_path) as zf, zf.open(info) as src, open(dst, "wb") as out:
+        shutil.copyfileobj(src, out, 1024 * 1024)
+    return dst
 
 def sips_props(path, *props):
     args = ["sips"]
@@ -74,29 +80,21 @@ def parse_exif_date(s):
     except ValueError:
         return None
 
-def file_date(path):
-    # fallback: modification time written by the ZIP (not reliable, but better than nothing)
+def zip_date(info):
     try:
-        return datetime.datetime.fromtimestamp(os.path.getmtime(path))
+        return datetime.datetime(*info.date_time)
     except Exception:
         return None
 
-def scan():
+def scan(zips):
+    """first pass: list members; photos get their EXIF date in the processing pass."""
     photos, videos = [], []
-    for root, dirs, files in os.walk(RAW):
-        dirs[:] = [d for d in dirs if not d.startswith(".") and d != "__MACOSX"]
-        for f in files:
-            if f.startswith("."):
-                continue
-            p = os.path.join(root, f)
-            ext = os.path.splitext(f)[1].lower()
-            if ext in IMG_EXT:
-                props = sips_props(p, "creation", "pixelWidth", "pixelHeight")
-                dt = parse_exif_date(props.get("creation"))
-                photos.append({"path": p, "dt": dt, "exif": dt is not None,
-                               "w": int(props.get("pixelWidth") or 0), "h": int(props.get("pixelHeight") or 0)})
-            elif ext in VID_EXT:
-                videos.append({"path": p, "dt": file_date(p), "size": os.path.getsize(p)})
+    for z, info in zip_members(zips):
+        ext = os.path.splitext(info.filename)[1].lower()
+        if ext in IMG_EXT:
+            photos.append({"zip": z, "info": info, "name": os.path.basename(info.filename)})
+        elif ext in VID_EXT:
+            videos.append({"name": os.path.basename(info.filename), "dt": zip_date(info), "size": info.file_size})
     return photos, videos
 
 def resize(src, dst, max_px):
@@ -115,31 +113,58 @@ def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     no_push = "--no-push" in sys.argv
     zips = [os.path.expanduser(a) for a in args if a.lower().endswith(".zip")]
-    if not zips and not os.path.isdir(RAW):
-        log("שימוש: python3 kozhnitz_import.py <קובץ.zip> [עוד...]")
-        sys.exit(1)
     if run(["which", "sips"]).returncode != 0:
         log("sips לא נמצא — הסקריפט מיועד ל-macOS."); sys.exit(1)
 
-    log("== שלב 1: פריסת ה-ZIP")
-    extract(zips)
+    if not zips:
+        log("שימוש: python3 kozhnitz_import.py <קובץ.zip> [עוד...]"); sys.exit(1)
+    for d in (RAW, TMP):
+        if os.path.isdir(d):
+            shutil.rmtree(d)   # leftovers from an earlier run — free the disk
 
-    log("== שלב 2: סריקה וקריאת תאריכים (יכול לקחת כמה דקות)")
-    photos, videos = scan()
+    log("== שלב 1: קריאת תוכן ה-ZIP (בלי פריסה)")
+    photos, videos = scan(zips)
     log(f"  נמצאו {len(photos)} תמונות ו-{len(videos)} סרטונים")
 
-    # group photos by day
+    log("== שלב 2+3: שליפת כל תמונה, קריאת תאריך והקטנה לרשת (יכול לקחת זמן)")
+    out_root = os.path.join(WORK, "site-assets", "img", "album")
+    if os.path.isdir(out_root):
+        shutil.rmtree(out_root)
+    tmp_small = os.path.join(WORK, "site-assets", "_tmp")
+    if os.path.isdir(tmp_small):
+        shutil.rmtree(tmp_small)
+    processed = []
+    for n, ph in enumerate(photos, 1):
+        try:
+            src = extract_one(ph["zip"], ph["info"])
+        except Exception as e:
+            log(f"  דילוג על {ph['name']}: {e}"); continue
+        try:
+            props = sips_props(src, "creation")
+            dt = parse_exif_date(props.get("creation"))
+            exif = dt is not None   # בלי EXIF התמונה נכנסת ל"ללא תאריך" (עדיף מתאריך שגוי)
+            stem = f"{n:05d}"
+            big = os.path.join(tmp_small, stem + ".jpg")
+            small = os.path.join(tmp_small, stem + "-900.jpg")
+            w, h = resize(src, big, LARGE)
+            resize(src, small, THUMB)
+            processed.append({"dt": dt, "exif": exif, "big": big, "small": small, "w": w, "h": h, "name": ph["name"]})
+        except Exception as e:
+            log(f"  דילוג על {ph['name']}: {e}")
+        finally:
+            try: os.remove(src)
+            except OSError: pass
+        if n % 25 == 0:
+            log(f"  {n}/{len(photos)} ...")
+    photos = processed
+
     groups = defaultdict(list)
     for ph in photos:
         key = ph["dt"].strftime("%Y-%m-%d") if ph["dt"] else "unknown"
         groups[key].append(ph)
     for key in groups:
-        groups[key].sort(key=lambda x: (x["dt"] or datetime.datetime.min, x["path"]))
+        groups[key].sort(key=lambda x: (x["dt"] or datetime.datetime.min, x["name"]))
 
-    log("== שלב 3: הקטנת תמונות לרשת")
-    out_root = os.path.join(WORK, "site-assets", "img", "album")
-    if os.path.isdir(out_root):
-        shutil.rmtree(out_root)
     galleries = []
     total_bytes = 0
     for key in sorted(groups, reverse=True):
@@ -148,32 +173,23 @@ def main():
             base = f"{key}/{i:03d}"
             big = os.path.join(out_root, base + ".jpg")
             small = os.path.join(out_root, base + "-900.jpg")
-            try:
-                w, h = resize(ph["path"], big, LARGE)
-                resize(ph["path"], small, THUMB)
-            except Exception as e:
-                log(f"  דילוג על {os.path.basename(ph['path'])}: {e}")
-                continue
+            os.makedirs(os.path.dirname(big), exist_ok=True)
+            shutil.move(ph["big"], big)
+            shutil.move(ph["small"], small)
             total_bytes += os.path.getsize(big) + os.path.getsize(small)
             items.append({"src": f"assets/img/album/{base}.jpg", "thumb": f"assets/img/album/{base}-900.jpg",
-                          "ratio": f"{w} / {h}", "alt": "מחצר הקודש קאזניץ"})
-        if not items:
-            continue
+                          "ratio": f"{ph['w']} / {ph['h']}", "alt": "מחצר הקודש קאזניץ"})
         first = groups[key][0]
         iso = first["dt"].strftime("%Y-%m-%dT%H:%M:%S") if first["dt"] else None
         galleries.append({"id": f"album-{key}", "title": "צילומים מחצר הקודש",
                           "date": iso, "items": items, "count": len(items)})
         log(f"  {key}: {len(items)} תמונות")
+    shutil.rmtree(tmp_small, ignore_errors=True)
 
-    log("== שלב 4: איסוף סרטונים (לא נכנסים לאתר)")
+    log("== שלב 4: ספירת סרטונים (לא נשלפים ולא עולים לאתר)")
     vid_groups = defaultdict(list)
     for v in videos:
         key = v["dt"].strftime("%Y-%m-%d") if v["dt"] else "unknown"
-        d = os.path.join(VIDEOS, key)
-        os.makedirs(d, exist_ok=True)
-        dst = os.path.join(d, os.path.basename(v["path"]))
-        if not os.path.exists(dst):
-            shutil.copy2(v["path"], dst)
         vid_groups[key].append(v)
 
     # galleries-album.js
@@ -236,7 +252,7 @@ def main():
     r = subprocess.run(["git", "-C", REPO, "push", "-u", "origin", "main"])
     if r.returncode == 0:
         log("\n✅ הועלה. האתר יתעדכן תוך כדקה:\n   https://raviv0526601900-debug.github.io/kozhnitz-site/")
-        log(f"\nעכשיו אפשר למחוק את קובצי ה-ZIP ואת {RAW}")
+        log("\nעכשיו אפשר למחוק את קובצי ה-ZIP.")
     else:
         log("\n❌ ה-push נכשל. ראו את ההודעה למעלה; אפשר לנסות שוב עם:\n   git -C " + REPO + " push -u origin main")
 
